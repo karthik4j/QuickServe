@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ESP8266 Data</title>
+    <script>
+        function fetchData() {
+            fetch("/data")
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById("output").innerText = data.message;
+                });
+        }
+        setInterval(fetchData, 3000); // Update every 3 seconds
+    </script>
+</head>
+<body>
+    <h1>ESP8266 Data</h1>
+    <p id="output">Waiting for data...</p>
+</body>
+</html>

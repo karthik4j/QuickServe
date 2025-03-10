@@ -1,14 +1,18 @@
 #UI layout test
 import tkinter as tk
 from tkinter import ttk
+
+from tkinter import messagebox
 from tkinter import PhotoImage
 import os
 import sqlite3
+import threading 
 
 global table_name
 global file
 global conn
 global table_name
+
 file ="python_proj.db"
 table_name = "my_plates" 
 
@@ -105,8 +109,8 @@ def display_plates():
 frame1 = ttk.Frame(menu_tab,relief='ridge')
 frame2 = ttk.Frame(menu_tab)
 
-scan_g_img = PhotoImage(file="C:\\Users\\karth\\Documents\\python\\canteen-proj\\button.png")
-scan_b_img =  PhotoImage(file='C:\\Users\\karth\\Documents\\python\\canteen-proj\\red-b.png')
+scan_g_img = PhotoImage(file="button.png")
+scan_b_img =  PhotoImage(file='red-b.png')
 
 lab0 = ttk.Label(frame1,text="Scan options: ",font=("Roboto",22,"bold")).pack(pady=10)
                                     
@@ -122,27 +126,50 @@ frame1.pack(side='left',ipadx=10,ipady=10)
 lab1 = ttk.Label(frame2,text='Available plate count is: 200',font=('Roboto', 18))
 lab1.pack(pady=10)
 frame2.pack(side='top',ipadx=50,ipady=50)
-
+#--------------------------------------------------------------  update/delete  --------------------------------------------------------------
+#accepts the plate id of the plate to be udpated and the state to be updated
+def update_plate(plate_id = None,plate_status=None):
+    if(plate_id == None or plate_status == None):
+        messagebox.showerror('Error','one or more entires are empty')
+        return None
+    if(check_table_conn()):
+        chk = cursor.execute(f'SELECT plate_id FROM {table_name} WHERE plate_id = {plate_id}')
+        if(chk.fetchone()):
+            
+            cursor.execute(f'UPDATE {table_name} SET plate_state = {plate_status} WHERE plate_id = {plate_id}')
+            cursor.commit()
+            messagebox.showinfo('Info','plate has been updated')
+        else:
+            messagebox.showerror('Error','Plate was not found in DB')
 #--------------------------------------------------------------  DATABASE   -------------------------------------------------------------------
-def refresh():
-    global list_of_plates_in_db
-   # refresh_btn.configure(state='disabled')
-    def clear_tree():
-       list_of_plates_in_db.reverse()
-       for item in db_table.get_children():
-           db_table.delete(item)
-    
+def fetch_data():
     if(check_table_conn()):
         list_of_plates_in_db = cursor.execute(f'select * from {table_name}')
         list_of_plates_in_db = list_of_plates_in_db.fetchall()
+        return list_of_plates_in_db
+
+def clear_tree():
+    list_of_plates_in_db = fetch_data()
+    for item in db_table.get_children():
+        db_table.delete(item)    
+def refresh():
+    #global list_of_plates_in_db
+    update_lab_sql()
+    if(check_table_conn()):
+        list_of_plates_in_db = fetch_data()
         if(list_of_plates_in_db !=None):
             clear_tree()
             for i in list_of_plates_in_db:
                 current_plate_id = i[0]
                 current_plate_status = i[1]
                 data = (current_plate_id,current_plate_status)
-                db_table.insert(parent='',index=0,values=data)
-    if(check_table_conn()==False):clear_tree()
+                if(current_plate_status == 1):
+                    db_table.insert(parent='',index=0,values=data,tag='avail')
+                else:
+                    db_table.insert(parent='',index=0,values=data,tag='use')
+    if(check_table_conn()==False):
+        create_table()
+        clear_tree()
         
 
     
@@ -156,32 +183,87 @@ db_table.heading('first',text='Plate number')
 db_table.heading('second',text='Plate status')
 db_table.column("first", anchor='center')
 db_table.column("second", anchor='center')
+
+db_table.tag_configure("avail",background='light green')
+db_table.tag_configure("use",background='tomato')
+
 db_table.pack(expand=True,fill='both')
 
 info1 = ttk.Label(db_notebook_f,text='1 means plate is availabe \n0 means its not.',foreground='red',font=('Roboto',20)).pack(side='left')
-ok_sql = check_table_conn()
-sql_status = ttk.Label(master=db_status_f,text=f"SQL connection status: {ok_sql}",font=('Roboto',22)).pack(side='left')
+
+ok_sql = tk.StringVar()
+sql_status_lb = ttk.Label(master=db_status_f,text=f"SQL connection status: ",font=('Roboto',22)).pack(side='left')
+
+sql_status = ttk.Label(master=db_status_f,textvariable=ok_sql,foreground='green',font=('Roboto',22))
+sql_status.pack(side='left')
+
+def update_lab_sql():
+    if(check_table_conn()):
+        ok_sql.set('Connected')
+        sql_status.configure(foreground='green')
+    else:
+        ok_sql.set('Not connected')
+        sql_status.configure(foreground='tomato')
+update_lab_sql()
+
 refresh_btn = ttk.Button(db_status_f,text='Refresh',command=refresh)
-refresh_btn.pack(padx=100,side='left')
+refresh_btn.pack(padx=20,side='left')
 
 db_status_f.pack(side='top',fill='x')
 db_notebook_f.pack(side='top',expand=True,fill='both')
-#--------------------------------------- purge all records ----------------------------------
+
 def kill_db():
-    if(check_table_conn()):
-        cursor.execute(f"drop table {table_name}")
-    #print(cursor.fetchone())
+    response = messagebox.askyesno("Drop tables?",'Do you really want to drop all tables?')
+    if(response):
+        if(check_table_conn()):
+            cursor.execute(f"drop table {table_name}")
+            messagebox.showinfo("Info","ALL data has been removed")
+            clear_tree()
+            update_lab_sql()
+        else:
+            messagebox.showerror("Error","No database to delete")
+        update_lab_sql()
+        #print(cursor.fetchone()
+        
+    else:
+        messagebox.showinfo("Info",'No changes to DB')
 
-pr = ttk.Frame(nb)
-pr_lab = ttk.Label(pr,text="Are you sure that you want to purge all records? ",font=("Roboto",30),foreground='red').pack()
-btn_ok = tk.Button(pr,text="I understand",font=("Roboto",14,"bold"),command=kill_db)
-btn_ok.pack()    
+btn_ok = tk.Button(db_tab,text="Drop database",font=("Roboto",14,"bold"),command=kill_db)
+btn_ok.pack()
+    
+#--------------------------------------- Modify DB  -----------------------------------------------------------------
+modify_db = ttk.Frame(nb)
+to_update_plate_id = tk.StringVar(value=None)
+to_update_state = tk.StringVar(value=None)
 
+entry_fram = ttk.Frame(modify_db)
+lb = ttk.Label(modify_db,text="Update plate ",font=('Roboto','14')).pack()
+
+pid_fram =ttk.Frame(entry_fram)
+lb1 = ttk.Label(pid_fram,text="PID").pack(side='left')
+ent1 = ttk.Entry(pid_fram,textvariable=to_update_plate_id).pack(side='left')
+
+pst_fram =ttk.Frame(entry_fram)
+lb2 = ttk.Label(pst_fram,text="State").pack(side='left')
+ent2 = ttk.Entry(pst_fram,textvariable=to_update_state).pack(side='left')
+
+pid_fram.pack()
+pst_fram.pack()
+entry_fram.pack()
+
+btn1 = ttk.Button(modify_db,text='Ok',command = lambda :update_plate(to_update_plate_id.get(),to_update_state.get()))
+                  #print(f"Entry: {to_update_plate_id.get()} state: {to_update_state.get()}"))
+                  ##
+btn1.pack()
+#-------------------------------------- On closing
+"""def on_closing():
+    cursor.close()
+    root.destroy() 
+"""
 #----------------------------------- Loop and notebook-menu section ----------------------------------------------
-
 nb.add(menu_tab,text="Menu")
 nb.add(db_tab,text="Database")
-nb.add(pr,text="KILL")
-
+nb.add(modify_db,text="(testing)")
+#root.protocol("WM_DELETE_WINDOW", on_closing)
 nb.pack()
 root.mainloop()

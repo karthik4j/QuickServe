@@ -6,20 +6,62 @@ from tkinter import messagebox
 from tkinter import PhotoImage
 import os
 import sqlite3
-import threading 
+import threading
+import qrcode
+import http.server
+import socketserver
 
 global table_name
 global file
 global conn
 global table_name
 
+import cv2
+import tkinter as tk
+from tkinter import Label
+from PIL import Image, ImageTk
+from pyzbar.pyzbar import decode
+import queue
+import time
+import platform
+import winsound
+
+PORT = 7000
+MESSAGE = "21"
+
 file ="python_proj.db"
 table_name = "my_plates" 
+#--------------------------------  HTTP server  ------------
+def server_run():
+    class CustomHandler(http.server.SimpleHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == "/data":
+                self.send_response(200)
+                self.send_header("Content-type", "text/plain")
+                self.end_headers()
+                MESSAGE = plate_count()
+                self.wfile.write(MESSAGE.encode())
+            elif self.path == "/":  # Serve the webpage
+                self.send_response(200)
+                self.send_header("Content-type", "text/html")
+                self.end_headers()
+                with open("index.html", "rb") as file:
+                    self.wfile.write(file.read())
+            else:
+                self.send_error(404, "Not Found")
 
+    with socketserver.TCPServer(("0.0.0.0", PORT), CustomHandler) as httpd:
+        print(f"Serving on port {PORT}")
+        httpd.serve_forever()
+#
+def check_multi():
+    MESSAGE = plate_count()
+    print(MESSAGE)
+#------------------------------------------------------------ 
 #testing if the connector exists, otherwise we create one
 def get_sql_conn():
     try: 
-      conn = sqlite3.connect(file) 
+      conn = sqlite3.connect(file,check_same_thread=False) 
      # print(f"Database {file} is formed.")
       return conn
     except: 
@@ -61,7 +103,7 @@ def check_table_conn():
 #conn.commit()
 #print((conn.execute(f'select * from {table_name}')).fetchone())
 
-    #--------------------------------------------------  ROOT WINDOW CONFIGURE   -------------------------------------------------------------
+#--------------------------------------------------  ROOT WINDOW CONFIGURE   -------------------------------------------------------------
 root = tk.Tk()
 
 window_width = 650
@@ -98,14 +140,127 @@ def create_plate():
     
        
 #------------------------------------------------ PLATE_ID DISPLAY -------------------------------------------
-def display_plates():
-    list_of_plates = cursor.execute(f'SELECT * from {table_name}')
-    list_of_plates = list_of_plates.fetchall()
-    for i in list_of_plates:
-        print(i)
-      
-#------------------------------------------------------------ MENU PAGE CODE ------------------------------------------
+def plate_count():
+    if(check_table_conn()):
+        val = cursor.execute(f"SELECT COUNT(plate_state) FROM {table_name} WHERE plate_state = 1")
+        VAL = str(val.fetchone())
+        VAL = VAL.strip("(),")
+        return VAL
+#-------------------------------------------------------OPENCV qr code ---------------------------
+class WebcamScanner:
+    def __init__(self, video_label, sound_path="beep.mp3", width=640, height=480, camera_index=0):
+        """
+        Initializes the webcam scanner with customizable options.
+        
+        Parameters:
+            video_label (tk.Label): The label to display the webcam feed.
+            sound_path (str): Path to the sound file to play on QR code detection.
+            width (int): Width of the webcam feed.
+            height (int): Height of the webcam feed.
+            camera_index (int): Index of the webcam to use (default is 0).
+        """
+        self.video_label = video_label
+        self.width = width
+        self.height = height
+        self.sound_path = sound_path
+        self.camera_index = camera_index
+        self.scanning = False
+        self.running = True
+        self.scanned_code = None
+        self.lock = threading.Lock()  # Lock for thread-safe access to scanned_code
 
+        # Queue for thread-safe frame passing
+        self.frame_queue = queue.Queue(maxsize=1)
+
+        # Open the specified webcam
+        self.cap = cv2.VideoCapture(self.camera_index)
+        if not self.cap.isOpened():
+            print(f"Error: Could not open webcam with index {self.camera_index}")
+            return
+        
+        # Start video capture in a separate thread
+        self.capture_thread = threading.Thread(target=self.capture_frames, daemon=True)
+        self.capture_thread.start()
+
+        # Start updating the GUI frame
+        self.update_frame()
+
+    def play_sound(self):
+        """Plays a sound when a QR code is detected."""
+        try:
+            if platform.system() == "Windows":
+                winsound.Beep(1000, 200)  # Frequency 1000 Hz, Duration 200 ms
+            else:
+                print("\a")  # Fallback beep for non-Windows systems
+        except Exception as e:
+            print(f"Error playing sound: {e}")
+
+    def scan_qr(self):
+        """Triggers QR code scanning on button press."""
+        self.scanning = True
+
+    def capture_frames(self):
+        """Captures frames continuously in a separate thread."""
+        while self.running:
+            ret, frame = self.cap.read()
+            if ret:
+                # Resize the frame for consistency
+                frame = cv2.resize(frame, (self.width, self.height))
+
+                # Check for QR code when scanning is triggered
+                if self.scanning:
+                    decoded_objects = decode(frame)
+                    for obj in decoded_objects:
+                        data = obj.data.decode("utf-8")
+                        if data.isdigit():
+                            number = int(data)
+                            print(f"Scanned Number: {number}")
+                            self.play_sound()
+                            with self.lock:
+                                self.scanned_code = number  # Store scanned code
+                            self.scanning = False  # Stop scanning after detecting
+                            break
+
+                # Put the frame into the queue if space is available
+                if not self.frame_queue.full():
+                    self.frame_queue.put(frame)
+
+            # Delay to reduce CPU usage
+            time.sleep(0.01)
+
+    def get_scanned_code(self):
+        """Returns the last scanned QR code and resets it to None."""
+        with self.lock:
+            code = self.scanned_code
+            self.scanned_code = None  # Reset after returning
+            return code
+
+    def update_frame(self):
+        """Updates the tkinter label with the latest frame from the queue."""
+        if not self.frame_queue.empty():
+            frame = self.frame_queue.get()
+
+            # Convert the frame to RGB and display it
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(frame)
+            imgtk = ImageTk.PhotoImage(image=img)
+
+            # Update the tkinter label
+            self.video_label.imgtk = imgtk
+            self.video_label.configure(image=imgtk)
+
+        # Schedule the next frame update
+        self.video_label.after(10, self.update_frame)
+
+    def stop(self):
+        """Releases the webcam and stops the feed."""
+        self.running = False
+        self.capture_thread.join()
+        self.cap.release()
+        cv2.destroyAllWindows()
+
+
+#------------------------------------------------------------ MENU PAGE CODE ------------------------------------------
 frame1 = ttk.Frame(menu_tab,relief='ridge')
 frame2 = ttk.Frame(menu_tab)
 
@@ -114,17 +269,21 @@ scan_b_img =  PhotoImage(file='red-b.png')
 
 lab0 = ttk.Label(frame1,text="Scan options: ",font=("Roboto",22,"bold")).pack(pady=10)
                                     
-scan_g = ttk.Button(frame1,text='Available',image = scan_g_img,command=create_plate).pack(pady=10)
-scan_b = ttk.Button(frame1,text='USE',image=scan_b_img,command=display_plates)
+plat_count_menu = tk.StringVar(value=plate_count())
+
+lab1 = ttk.Label(frame2,text=f'Available plate count is: ',font=('Roboto', 18))
+lab1.pack(pady=10)
+lab11 = ttk.Label(frame2,textvariable=plat_count_menu,font=('Roboto', 18)).pack()
+qr_window =ttk.Label(master=frame2)
+qr_window.pack()
+scanner = WebcamScanner(qr_window, width=350, height=400, camera_index=0)
+scan_g = ttk.Button(frame1,text='Available',image = scan_g_img,command=lambda:plate_avail(scanner)).pack(pady=10)
+#frame1.pack(expand=True,fill='both',side='left')
+frame1.pack(side='left',ipadx=10,ipady=10)
+scan_b = ttk.Button(frame1,text='USE',image=scan_b_img,command=lambda:plate_in_use(scanner))
 #scan_g.pack(expand=True,fill='both')
 scan_b.pack(padx=10)
 
-
-#frame1.pack(expand=True,fill='both',side='left')
-frame1.pack(side='left',ipadx=10,ipady=10)
-
-lab1 = ttk.Label(frame2,text='Available plate count is: 200',font=('Roboto', 18))
-lab1.pack(pady=10)
 frame2.pack(side='top',ipadx=50,ipady=50)
 #--------------------------------------------------------------  update/delete  --------------------------------------------------------------
 #accepts the plate id of the plate to be udpated and the state to be updated
@@ -141,6 +300,19 @@ def update_plate(plate_id = None,plate_status=None):
             messagebox.showinfo('Info','plate has been updated')
         else:
             messagebox.showerror('Error','Plate was not found in DB')
+def plate_avail(obj):
+    obj.scan_qr()
+    ret_val = obj.get_scanned_code()
+    update_plate(ret_val,1)
+    plat_count_menu.set(value=plate_count())
+    #obj.scanned_code = None
+def plate_in_use(obj):
+    obj.scan_qr()
+    ret_val = obj.get_scanned_code()
+    print(ret_val)
+    update_plate(ret_val,0)
+    plat_count_menu.set(value=plate_count())
+    #obj.scanned_code = None
 #--------------------------------------------------------------  DATABASE   -------------------------------------------------------------------
 def fetch_data():
     if(check_table_conn()):
@@ -155,6 +327,7 @@ def clear_tree():
 def refresh():
     #global list_of_plates_in_db
     update_lab_sql()
+    plat_count_menu.set(plate_count())
     if(check_table_conn()):
         list_of_plates_in_db = fetch_data()
         if(list_of_plates_in_db !=None):
@@ -255,15 +428,55 @@ btn1 = ttk.Button(modify_db,text='Ok',command = lambda :update_plate(to_update_p
                   #print(f"Entry: {to_update_plate_id.get()} state: {to_update_state.get()}"))
                   ##
 btn1.pack()
-#-------------------------------------- On closing
-"""def on_closing():
-    cursor.close()
-    root.destroy() 
-"""
+#-------------------------------------- qr_manag ---------------------------------------
+def number_to_qr(number):
+    folder_name = "qr_codes"
+    if not os.path.exists(folder_name):
+        os.makedirs(folder_name)
+    
+    data = str(number)
+    qr = qrcode.make(data)
+    
+    file_path = os.path.join(folder_name, f"{data}.png")
+    qr.save(file_path)
+    messagebox.showinfo("Info: ",f"QR code saved at: {file_path}")
+
+
+def gen_qr():
+    if(check_table_conn):
+        ls = cursor.execute(f"SELECT MAX(plate_id) FROM {table_name}")
+        ls = str(ls.fetchone()).strip('(),')
+        if(ls == "None"):
+            new_id = 1
+            
+           
+        else:
+            ls = int(ls)
+            new_id = ls + 1
+        number_to_qr(new_id)
+        cursor.execute(f'insert into {table_name} values({new_id},1)')
+
+        cursor.commit()
+        messagebox.showinfo("QR DB","A new QR code has been created")
+def rem_qr():
+    print('ff')
+
+qr_manage = ttk.Frame(master=nb)
+bf = ttk.Frame(qr_manage)
+qr_lab = ttk.Label(qr_manage,text="QR Code Management",font=('Roboto',22,'bold',)).pack()
+qr_add = ttk.Button(bf,text="Generate QR",command=gen_qr).pack(side='left',ipadx=50,ipady=50)
+qr_remove = ttk.Button(bf,text="Remove QR",command=rem_qr).pack(side='left',ipadx=50,ipady=50)
+bf.pack()
+
+
 #----------------------------------- Loop and notebook-menu section ----------------------------------------------
 nb.add(menu_tab,text="Menu")
 nb.add(db_tab,text="Database")
+nb.add(qr_manage,text="QR code")
 nb.add(modify_db,text="(testing)")
 #root.protocol("WM_DELETE_WINDOW", on_closing)
+web_thread = threading.Thread(target = server_run)
+web_thread.start()
 nb.pack()
 root.mainloop()
+scanner.stop()

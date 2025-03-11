@@ -12,6 +12,15 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-type", "text/plain")
             self.end_headers()
+            while(i<5):
+                i = i+i
+                MESSAGE = str(i)
+                print(MESSAGE)
+                if(i==5):
+                    i=1
+                self.wfile.write(MESSAGE.encode())
+     
+            
             self.wfile.write(MESSAGE.encode())
         elif self.path == "/":  # Serve the webpage
             self.send_response(200)

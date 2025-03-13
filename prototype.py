@@ -63,6 +63,7 @@ def get_sql_conn():
     try: 
       conn = sqlite3.connect(file,check_same_thread=False) 
      # print(f"Database {file} is formed.")
+      
       return conn
     except: 
       print(f"Database {file} not formed.")
@@ -189,7 +190,7 @@ class WebcamScanner:
         """Plays a sound when a QR code is detected."""
         try:
             if platform.system() == "Windows":
-                winsound.Beep(1000, 200)  # Frequency 1000 Hz, Duration 200 ms
+                winsound.Beep(1000, 300)  # Frequency 1000 Hz, Duration 200 ms
             else:
                 print("\a")  # Fallback beep for non-Windows systems
         except Exception as e:
@@ -261,6 +262,12 @@ class WebcamScanner:
 
 
 #------------------------------------------------------------ MENU PAGE CODE ------------------------------------------
+        
+def cam_ref_sh():
+    scanner.scan_qr()
+    plat_count_menu.set(plate_count())
+    
+
 frame1 = ttk.Frame(menu_tab,relief='ridge')
 frame2 = ttk.Frame(menu_tab)
 
@@ -271,13 +278,17 @@ lab0 = ttk.Label(frame1,text="Scan options: ",font=("Roboto",22,"bold")).pack(pa
                                     
 plat_count_menu = tk.StringVar(value=plate_count())
 
-lab1 = ttk.Label(frame2,text=f'Available plate count is: ',font=('Roboto', 18))
-lab1.pack(pady=10)
-lab11 = ttk.Label(frame2,textvariable=plat_count_menu,font=('Roboto', 18)).pack()
+mu_lab_fram = ttk.Frame(frame2)
+lab1 = ttk.Label(mu_lab_fram,text=f'Available plate count is: ',font=('Roboto', 18))
+lab1.pack(side='left',pady=10)
+lab11 = ttk.Label(mu_lab_fram,textvariable=plat_count_menu,font=('Roboto', 18)).pack(side='left',)
+#QR CODE READING/HANDLING/DISPLAY IN MAIN PAGE
 qr_window =ttk.Label(master=frame2)
+mu_lab_fram.pack()
 qr_window.pack()
 scanner = WebcamScanner(qr_window, width=350, height=400, camera_index=0)
 scan_g = ttk.Button(frame1,text='Available',image = scan_g_img,command=lambda:plate_avail(scanner)).pack(pady=10)
+
 #frame1.pack(expand=True,fill='both',side='left')
 frame1.pack(side='left',ipadx=10,ipady=10)
 scan_b = ttk.Button(frame1,text='USE',image=scan_b_img,command=lambda:plate_in_use(scanner))
@@ -285,6 +296,7 @@ scan_b = ttk.Button(frame1,text='USE',image=scan_b_img,command=lambda:plate_in_u
 scan_b.pack(padx=10)
 
 frame2.pack(side='top',ipadx=50,ipady=50)
+ref_sh = ttk.Button(master=frame1,text='Refresh ',command=cam_ref_sh).pack(pady=20)
 #--------------------------------------------------------------  update/delete  --------------------------------------------------------------
 #accepts the plate id of the plate to be udpated and the state to be updated
 def update_plate(plate_id = None,plate_status=None):
@@ -343,9 +355,6 @@ def refresh():
     if(check_table_conn()==False):
         create_table()
         clear_tree()
-        
-
-    
 
 db_tab = ttk.Frame(nb)
 db_status_f = ttk.Frame(db_tab)
@@ -439,7 +448,7 @@ def number_to_qr(number):
     
     file_path = os.path.join(folder_name, f"{data}.png")
     qr.save(file_path)
-    messagebox.showinfo("Info: ",f"QR code saved at: {file_path}")
+    messagebox.showinfo("A new QR code has been created: ",f"QR code saved at: {file_path}")
 
 
 def gen_qr():
@@ -457,17 +466,42 @@ def gen_qr():
         cursor.execute(f'insert into {table_name} values({new_id},1)')
 
         cursor.commit()
-        messagebox.showinfo("QR DB","A new QR code has been created")
+        #messagebox.showinfo("QR DB","A new QR code has been created")
 def rem_qr():
-    print('ff')
+    if(check_table_conn()):
+       cursor_n = cursor.cursor()
+       to_rem  = del_pid.get()
+       if len(to_rem)>0:
+           cursor_n.execute(f"DELETE FROM {table_name} WHERE plate_id = {int(to_rem)}")
+           
+           if( cursor_n.rowcount==0):
+               messagebox.showerror('Error','No such plate exist in DB')
+           else:
+               messagebox.showinfo('Info',"Deleted plate from DB")
+               path_f = f"C:\\Users\\karth\\Documents\\python\\canteen-proj\\QuickServe\\qr_codes\\{to_rem}.png"
+               os.remove(path_f) 
+               cursor.commit()
+       else:
+           messagebox.showerror('Error',"You're entering null value")
+      
+           
+        
 
 qr_manage = ttk.Frame(master=nb)
-bf = ttk.Frame(qr_manage)
 qr_lab = ttk.Label(qr_manage,text="QR Code Management",font=('Roboto',22,'bold',)).pack()
+bf = ttk.Frame(qr_manage)
+
 qr_add = ttk.Button(bf,text="Generate QR",command=gen_qr).pack(side='left',ipadx=50,ipady=50)
 qr_remove = ttk.Button(bf,text="Remove QR",command=rem_qr).pack(side='left',ipadx=50,ipady=50)
-bf.pack()
 
+bf2 = ttk.Frame(qr_manage)
+qr_say = ttk.Label(bf2,text='Enter Plate_ID: ',font=('Roboto'),foreground='tomato').pack(side='left')
+del_pid = tk.StringVar(value=None)
+rm_entry = ttk.Entry(master=bf2,textvariable=del_pid)
+rm_entry.pack(side='left')
+
+bf.pack()
+bf2.pack(padx=200,fill='x')
 
 #----------------------------------- Loop and notebook-menu section ----------------------------------------------
 nb.add(menu_tab,text="Menu")

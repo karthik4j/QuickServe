@@ -3,9 +3,9 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 
-const char* ssid = "GNXS-2.4G-4B45D0";  // Change to your Wi-Fi SSID
-const char* password = "200C864B45D0";  // Change to your Wi-Fi password
-const char* serverURL = "http://192.168.1.37:7000/data"; // Change to your computer's IP
+const char* ssid = "Vybe";  // Change to your Wi-Fi SSID
+const char* password = "karthikj";  // Change to your Wi-Fi password
+const char* serverURL = "http://192.168.45.194:7000//data"; // Change to your computer's IP
 
 LiquidCrystal_I2C lcd(0x26, 16, 2); // LCD I2C address is usually 0x27
 

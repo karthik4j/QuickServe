@@ -1,6 +1,11 @@
 #UI layout test
-import tkinter as tk
-from tkinter import ttk
+#import tkinter as tk
+#from tkinter import ttk
+import ttkbootstrap as tb
+from ttkbootstrap.constants import *
+
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
 
 from tkinter import messagebox
 from tkinter import PhotoImage
@@ -10,27 +15,37 @@ import threading
 import qrcode
 import http.server
 import socketserver
+import math
 
 global table_name
 global file
 global conn
-global table_name
 
 import cv2
 import tkinter as tk
 from tkinter import Label
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk,ImageFont,ImageDraw
 from pyzbar.pyzbar import decode
 import queue
 import time
 import platform
 import winsound
+import http.server
+import socketserver
+
 
 PORT = 7000
 MESSAGE = "21"
-
+#os.environ["OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS"] = "0"
 file ="python_proj.db"
-table_name = "my_plates" 
+table_name = "my_plates"
+set_theme = "cosmo"
+_bg ='white'
+_bg2 = "sky blue"
+_fg = "bisque"
+b_style ='info-outline'
+window_width = 700
+window_height = 530
 #--------------------------------  HTTP server  ------------
 def server_run():
     class CustomHandler(http.server.SimpleHTTPRequestHandler):
@@ -45,13 +60,14 @@ def server_run():
                 self.send_response(200)
                 self.send_header("Content-type", "text/html")
                 self.end_headers()
-                with open("index.html", "rb") as file:
+                with open("website\index.html", "rb") as file:
                     self.wfile.write(file.read())
             else:
                 self.send_error(404, "Not Found")
 
-    with socketserver.TCPServer(("0.0.0.0", PORT), CustomHandler) as httpd:
-        print(f"Serving on port {PORT}")
+    with socketserver.TCPServer(('0.0.0.0', PORT), CustomHandler) as httpd:
+        print(f"Serving at {PORT}")
+
         httpd.serve_forever()
 #
 def check_multi():
@@ -105,18 +121,16 @@ def check_table_conn():
 #print((conn.execute(f'select * from {table_name}')).fetchone())
 
 #--------------------------------------------------  ROOT WINDOW CONFIGURE   -------------------------------------------------------------
-root = tk.Tk()
-
-window_width = 650
-window_height = 500
+root = tb.Window(themename=set_theme)
+style=ttk.Style()
 root.title("QuickServe")
 lent = int((root.winfo_screenheight()/2)-window_height/2)
 widt = int((root.winfo_screenwidth()/2)-window_width/2)
 root.geometry("{}x{}+{}+{}".format(window_width,window_height,widt,lent))
 root.minsize(window_width,window_height)
 root.maxsize(window_width,window_height)
-
 nb = ttk.Notebook(root)
+root.iconbitmap('res/logo.ico')
 menu_tab = ttk.Frame(nb)
 global cursor
 #check SQL connectivity and set up cursor to be used
@@ -261,42 +275,54 @@ class WebcamScanner:
         cv2.destroyAllWindows()
 
 
-#------------------------------------------------------------ MENU PAGE CODE ------------------------------------------
         
+   
+#------------------------------------------------------------ MENU PAGE CODE ------------------------------------------
+
 def cam_ref_sh():
     scanner.scan_qr()
     plat_count_menu.set(plate_count())
-    
 
-frame1 = ttk.Frame(menu_tab,relief='ridge')
-frame2 = ttk.Frame(menu_tab)
 
-scan_g_img = PhotoImage(file="button.png")
-scan_b_img =  PhotoImage(file='red-b.png')
+style = ttk.Style()
+style.configure("My.TFrame",background=_bg)
+style.configure("frame2.TFrame",background=_bg2)
+style.configure('frame3.TLabel',background=_bg2)
 
-lab0 = ttk.Label(frame1,text="Scan options: ",font=("Roboto",22,"bold")).pack(pady=10)
+frame1 = ttk.Frame(menu_tab,relief='ridge',style='My.TFrame')
+frame2 = ttk.Frame(menu_tab,style="frame2.TFrame")
+
+
+scan_g_img = PhotoImage(file="res/AvailableV.png")
+scan_b_img =  PhotoImage(file='res/InuseV.png')
+
+lab0 = ttk.Label(frame1,text="SCAN OPTIONS",font=("Bebas Neue",22,"bold")).pack(pady=10,expand=True)
                                     
 plat_count_menu = tk.StringVar(value=plate_count())
 
 mu_lab_fram = ttk.Frame(frame2)
-lab1 = ttk.Label(mu_lab_fram,text=f'Available plate count is: ',font=('Roboto', 18))
-lab1.pack(side='left',pady=10)
-lab11 = ttk.Label(mu_lab_fram,textvariable=plat_count_menu,font=('Roboto', 18)).pack(side='left',)
+lab1 = ttk.Label(mu_lab_fram,text=f'    AVAILABLE PLATE COUNT IS:',font=('Bebas Neue', 18),style='frame3.TLabel')
+lab1.pack(side='left')
+lab11 = ttk.Label(mu_lab_fram,textvariable=plat_count_menu,font=('Bebas Neue', 18),style="frame3.TLabel").pack(side='left')
 #QR CODE READING/HANDLING/DISPLAY IN MAIN PAGE
 qr_window =ttk.Label(master=frame2)
 mu_lab_fram.pack()
 qr_window.pack()
+
 scanner = WebcamScanner(qr_window, width=350, height=400, camera_index=0)
-scan_g = ttk.Button(frame1,text='Available',image = scan_g_img,command=lambda:plate_avail(scanner)).pack(pady=10)
+cv_done =False
+scan_g = ttk.Button(frame1,text='Available',image = scan_g_img,command=lambda:plate_avail(scanner),bootstyle=b_style,padding=0).pack(padx=10,expand=False)#pady=10)
+scan_b = ttk.Button(frame1,text='USE',image=scan_b_img,command=lambda:plate_in_use(scanner),bootstyle=b_style,padding=0)
+scan_b.pack(pady=10,expand=False)#padx=10)
 
-#frame1.pack(expand=True,fill='both',side='left')
-frame1.pack(side='left',ipadx=10,ipady=10)
-scan_b = ttk.Button(frame1,text='USE',image=scan_b_img,command=lambda:plate_in_use(scanner))
-#scan_g.pack(expand=True,fill='both')
-scan_b.pack(padx=10)
 
-frame2.pack(side='top',ipadx=50,ipady=50)
-ref_sh = ttk.Button(master=frame1,text='Refresh ',command=cam_ref_sh).pack(pady=20)
+frame1.pack(ipady=30,side='left',expand=True,fill='both')
+frame2.pack(side='left',expand=True,fill='both')
+#frame1.pack(side='left',ipadx=10,ipady=10,expand=True,fill='y')
+#frame2.pack(side='top',ipadx=50,ipady=50)
+style.configure('btn1.TButton',background=_bg2,bootstyle='info-outline',font=("Bebas Neue",22))
+ref_sh = ttk.Button(master=frame1,text='Refresh ',command=cam_ref_sh,style='btn1.TButton').pack(pady=20)
+#menu_tab.pack(expand=True)
 #--------------------------------------------------------------  update/delete  --------------------------------------------------------------
 #accepts the plate id of the plate to be udpated and the state to be updated
 def update_plate(plate_id = None,plate_status=None):
@@ -374,9 +400,9 @@ db_table.pack(expand=True,fill='both')
 info1 = ttk.Label(db_notebook_f,text='1 means plate is availabe \n0 means its not.',foreground='red',font=('Roboto',20)).pack(side='left')
 
 ok_sql = tk.StringVar()
-sql_status_lb = ttk.Label(master=db_status_f,text=f"SQL connection status: ",font=('Roboto',22)).pack(side='left')
+sql_status_lb = ttk.Label(master=db_status_f,text=f"SQL connection status: ",font=('Roboto',20)).pack(side='left')
 
-sql_status = ttk.Label(master=db_status_f,textvariable=ok_sql,foreground='green',font=('Roboto',22))
+sql_status = ttk.Label(master=db_status_f,textvariable=ok_sql,foreground='green',font=('Roboto',20))
 sql_status.pack(side='left')
 
 def update_lab_sql():
@@ -387,8 +413,10 @@ def update_lab_sql():
         ok_sql.set('Not connected')
         sql_status.configure(foreground='tomato')
 update_lab_sql()
+#style.configure('Ref.TButton',background='info-outline')
+style.configure('REF.TButton',foreground='black',background='white',bootstyle='info-link',font=("Bebas Neue",18))
 
-refresh_btn = ttk.Button(db_status_f,text='Refresh',command=refresh)
+refresh_btn = ttk.Button(db_status_f,text='Refresh',command=refresh,style='REF.TButton')
 refresh_btn.pack(padx=20,side='left')
 
 db_status_f.pack(side='top',fill='x')
@@ -409,8 +437,10 @@ def kill_db():
         
     else:
         messagebox.showinfo("Info",'No changes to DB')
+#style.configure('btn2.TButton',bootstyle='danger-outline')
+style.configure('DB.TButton',background='red',bootstyle='danger-link',font=("Bebas Neue",22))
 
-btn_ok = tk.Button(db_tab,text="Drop database",font=("Roboto",14,"bold"),command=kill_db)
+btn_ok = ttk.Button(db_tab,text="Drop database",command=kill_db,style='DB.TButton')
 btn_ok.pack()
     
 #--------------------------------------- Modify DB  -----------------------------------------------------------------
@@ -419,10 +449,10 @@ to_update_plate_id = tk.StringVar(value=None)
 to_update_state = tk.StringVar(value=None)
 
 entry_fram = ttk.Frame(modify_db)
-lb = ttk.Label(modify_db,text="Update plate ",font=('Roboto','14')).pack()
+lb = ttk.Label(modify_db,text="Update plate ",font=('Roboto','14')).pack(padx=20)
 
 pid_fram =ttk.Frame(entry_fram)
-lb1 = ttk.Label(pid_fram,text="PID").pack(side='left')
+lb1 = ttk.Label(pid_fram,text="PID").pack(padx=4.5,side='left')
 ent1 = ttk.Entry(pid_fram,textvariable=to_update_plate_id).pack(side='left')
 
 pst_fram =ttk.Frame(entry_fram)
@@ -436,8 +466,95 @@ entry_fram.pack()
 btn1 = ttk.Button(modify_db,text='Ok',command = lambda :update_plate(to_update_plate_id.get(),to_update_state.get()))
                   #print(f"Entry: {to_update_plate_id.get()} state: {to_update_state.get()}"))
                   ##
-btn1.pack()
-#-------------------------------------- qr_manag ---------------------------------------
+btn1.pack(padx=50,pady=20)
+#------------------------------------------- COMBINING QR CODE -------------------------
+def combine_qr_codes(input_folder, output_folder="output", qr_size=350, max_per_page=20):
+        #Combines multiple PNG QR codes into A4-sized sheets (210x297 mm).
+
+        #Parameters:
+        #input_folder (str): Folder containing QR code PNG files.
+        #output_folder (str): Folder to save the combined A4 images.
+        #qr_size (int): Size of each QR code in pixels.
+        #max_per_page (int): Maximum number of QR codes per A4 sheet.
+    try:
+        os.makedirs(output_folder, exist_ok=True)
+
+        # Load all PNG files from the input folder
+        files = [f for f in os.listdir(input_folder) if f.lower().endswith(".png")]
+        if not files:
+            print("No PNG files found in the specified folder.")
+            messagebox.showerror('No QR found','QR code folder empty. Try adding new QR using "Generate QR"')
+            return
+
+        # Calculate grid size (4x5 for 20 QR codes per page)
+        cols = 4
+        rows = 5
+        margin = 30
+        text_height = 50  # Height reserved for the filename text
+        page_width, page_height = 2480, 3508  # A4 size at 300 DPI
+
+        # Adjust QR code size to fit 20 per page
+        qr_size = min((page_width - margin * (cols + 1)) // cols, (page_height - margin * (rows + 1) - rows * text_height) // rows)
+
+        # Font setup
+        try:
+            font = ImageFont.truetype("arial.ttf", 28)
+        except IOError:
+            print("Arial font not found. Using default font.")
+            font = ImageFont.load_default()
+
+        page_number = 1
+        total_pages = math.ceil(len(files) / max_per_page)
+        img_count = 0
+
+        # Iterate through the files and group them into pages
+        while img_count < len(files):
+            # Create a new A4-sized blank image
+            page = Image.new("RGB", (page_width, page_height), "white")
+            draw = ImageDraw.Draw(page)
+
+            for row in range(rows):
+                for col in range(cols):
+                    if img_count >= len(files):
+                        break
+
+                    file_name = files[img_count]
+                    img_path = os.path.join(input_folder, file_name)
+
+                    try:
+                        qr_img = Image.open(img_path).resize((qr_size, qr_size))
+                    except Exception as e:
+                        print(f"Error loading {file_name}: {e}")
+                        img_count += 1
+                        continue
+
+                    # Calculate position
+                    x = margin + col * (qr_size + margin)
+                    y = margin + row * (qr_size + margin + text_height)
+
+                    # Add the filename text above the QR code
+                    text_width, _ = draw.textbbox((0, 0), file_name, font=font)[2:4]
+                    text_x = x + (qr_size - text_width) // 2
+                    draw.text((text_x, y), file_name, fill="black", font=font)
+
+                    # Paste the QR code image below the text
+                    page.paste(qr_img, (x, y + text_height))
+
+                    img_count += 1
+
+            # Save the page
+            output_path = os.path.join(output_folder, f"combined_page_{page_number}.png")
+            page.save(output_path)
+            print(f"Page {page_number}/{total_pages} saved: {output_path}")
+            page_number += 1
+
+        #print("All QR codes combined successfully!")
+        messagebox.showinfo(f'QR combine',f'QR codes have been merged into a single file in: {output_path}')
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+#-------------------------------------- qr_management ---------------------------------------
+
 def number_to_qr(number):
     folder_name = "qr_codes"
     if not os.path.exists(folder_name):
@@ -452,7 +569,7 @@ def number_to_qr(number):
 
 
 def gen_qr():
-    if(check_table_conn):
+    if(check_table_conn()):
         ls = cursor.execute(f"SELECT MAX(plate_id) FROM {table_name}")
         ls = str(ls.fetchone()).strip('(),')
         if(ls == "None"):
@@ -467,6 +584,10 @@ def gen_qr():
 
         cursor.commit()
         #messagebox.showinfo("QR DB","A new QR code has been created")
+    else:
+        messagebox.showerror('DB error',"Database or Table does not exist. Creating one.")
+        create_table()
+        
 def rem_qr():
     if(check_table_conn()):
        cursor_n = cursor.cursor()
@@ -491,8 +612,9 @@ qr_manage = ttk.Frame(master=nb)
 qr_lab = ttk.Label(qr_manage,text="QR Code Management",font=('Roboto',22,'bold',)).pack()
 bf = ttk.Frame(qr_manage)
 
-qr_add = ttk.Button(bf,text="Generate QR",command=gen_qr).pack(side='left',ipadx=50,ipady=50)
-qr_remove = ttk.Button(bf,text="Remove QR",command=rem_qr).pack(side='left',ipadx=50,ipady=50)
+qr_add = ttk.Button(bf,text="Generate QR",command=gen_qr).pack(side='left',padx=10,ipadx=50,ipady=50)
+combine_btn = ttk.Button(bf,text="Combine QR codes",command = lambda: combine_qr_codes("qr_codes")).pack(side='left',ipadx=30,ipady=50,padx=10,pady=50)
+qr_remove = ttk.Button(bf,text="Remove QR",command=rem_qr).pack(side='left',padx=10,ipadx=50,ipady=50)
 
 bf2 = ttk.Frame(qr_manage)
 qr_say = ttk.Label(bf2,text='Enter Plate_ID: ',font=('Roboto'),foreground='tomato').pack(side='left')

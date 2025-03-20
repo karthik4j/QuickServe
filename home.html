@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Number of Available Plates</title>
+    <style>
+        body {
+            font-family: sans-serif,'Bebas Neue';
+            background-image: url('web_back.png'); /* Background image */
+            background-size: cover;
+            background-position: center;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            flex-direction: column;
+            color: #333;
+        }
+
+        #data-box {
+            font-size: 22px;
+            padding: 18spx;
+            color: #fff;
+            text-align: center;
+            transition: all 0.3s ease;
+            position: absolute;
+            top: 49%;
+            left: 33.3%;
+            transform: translate(-50%, -50%);
+         
+        }
+    </style>
+</head>
+<body>
+    <div id="data-box">
+        <h2>AVAILABLE PLATES : </h2>
+       <h2> <div id="plate-number">Waiting for data...</div> </h2>
+    </div>
+
+    <script>
+        function fetchData() {
+            fetch('/data')
+                .then(response => response.text())
+                .then(data => {
+                    document.getElementById('plate-number').innerText = data;
+                })
+                .catch(error => {
+                    console.error("Error fetching data:", error);
+                    document.getElementById('plate-number').innerText = 'Error fetching data';
+                });
+        }
+
+        // Initial fetch and then refresh every second
+        fetchData();
+        setInterval(fetchData, 1000);
+    </script>
+</body>
+</html>

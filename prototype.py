@@ -60,7 +60,7 @@ def server_run():
                 self.send_response(200)
                 self.send_header("Content-type", "text/html")
                 self.end_headers()
-                with open("website\index.html", "rb") as file:
+                with open("website\\index.html", "rb") as file:
                     self.wfile.write(file.read())
             else:
                 self.send_error(404, "Not Found")
@@ -278,7 +278,6 @@ class WebcamScanner:
         
    
 #------------------------------------------------------------ MENU PAGE CODE ------------------------------------------
-
 def cam_ref_sh():
     scanner.scan_qr()
     plat_count_menu.set(plate_count())

@@ -20,6 +20,7 @@ Users (students/faculty) who utilize the canteen facilities of the college often
 
 This flowchart shows how the users might interact with the system.
 ![flowchart](https://github.com/karthik4j/Quick-Serve/blob/main/images/user-interaction.png?raw=true)
+
 **User :** The user is anyone who wishes to have lunch from the college canteen.
 **Staff :** Cashiers, people at the food counter, the people involved in cleaning the plates
 * Initially when a user orders some food, the user goes to the food counter to get the food.
@@ -94,3 +95,9 @@ Here are some screenshots of the app :
 ## Prototype website :
 * The website allows end users to view the live count.
 ![4.](https://github.com/karthik4j/Quick-Serve/blob/main/images/4.png?raw=true)
+## How to run the application:
+*  To run the program create a virtual environment using pythom -m venv .env
+*  Install all the required modules by running "pip install -r requirements.txt"
+* Start the program by running "python prototype.py"
+* Find the IP of the HOST device and replace that IP address in the "esptes.ino" program
+* Replace the ssid and password in the program with your access points' credentials

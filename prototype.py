@@ -69,7 +69,7 @@ def server_run():
         print(f"Serving at {PORT}")
 
         httpd.serve_forever()
-#
+        
 def check_multi():
     MESSAGE = plate_count()
     print(MESSAGE)
@@ -165,7 +165,7 @@ def plate_count():
 class WebcamScanner:
     def __init__(self, video_label, sound_path="beep.mp3", width=640, height=480, camera_index=0):
         """
-        Initializes the webcam scanner with customizable options.
+        Initializes the webcam scanner without immediately opening the webcam.
         
         Parameters:
             video_label (tk.Label): The label to display the webcam feed.
@@ -180,33 +180,48 @@ class WebcamScanner:
         self.sound_path = sound_path
         self.camera_index = camera_index
         self.scanning = False
-        self.running = True
+        self.running = False  # Camera is off initially
         self.scanned_code = None
-        self.lock = threading.Lock()  # Lock for thread-safe access to scanned_code
+        self.lock = threading.Lock()
 
         # Queue for thread-safe frame passing
         self.frame_queue = queue.Queue(maxsize=1)
 
-        # Open the specified webcam
-        self.cap = cv2.VideoCapture(self.camera_index)
-        if not self.cap.isOpened():
-            print(f"Error: Could not open webcam with index {self.camera_index}")
-            return
-        
-        # Start video capture in a separate thread
+        # Placeholder image while the camera loads
+        self.show_placeholder()
+
+    def show_placeholder(self):
+        """Displays a placeholder image on the Tkinter label."""
+        img = Image.new("RGB", (self.width, self.height), color=(50, 50, 50))  # Grey placeholder
+        imgtk = ImageTk.PhotoImage(image=img)
+        self.video_label.imgtk = imgtk
+        self.video_label.configure(image=imgtk)
+
+    def start_camera(self):
+        """Starts the webcam in a separate thread to avoid UI blocking."""
+        if self.running:
+            return  # Already running
+
+        self.running = True
         self.capture_thread = threading.Thread(target=self.capture_frames, daemon=True)
         self.capture_thread.start()
-
-        # Start updating the GUI frame
         self.update_frame()
+
+    def stop_camera(self):
+        """Stops the webcam and releases resources."""
+        self.running = False
+        if hasattr(self, "cap") and self.cap.isOpened():
+            self.cap.release()
+        cv2.destroyAllWindows()
+        self.show_placeholder()  # Show placeholder when camera stops
 
     def play_sound(self):
         """Plays a sound when a QR code is detected."""
         try:
             if platform.system() == "Windows":
-                winsound.Beep(1000, 300)  # Frequency 1000 Hz, Duration 200 ms
+                winsound.Beep(1000, 300)
             else:
-                print("\a")  # Fallback beep for non-Windows systems
+                print("\a")  # Fallback beep for non-Windows
         except Exception as e:
             print(f"Error playing sound: {e}")
 
@@ -215,14 +230,18 @@ class WebcamScanner:
         self.scanning = True
 
     def capture_frames(self):
-        """Captures frames continuously in a separate thread."""
+        """Initializes the webcam and captures frames continuously."""
+        self.cap = cv2.VideoCapture(self.camera_index)
+        if not self.cap.isOpened():
+            print(f"Error: Could not open webcam with index {self.camera_index}")
+            self.running = False
+            return
+
         while self.running:
             ret, frame = self.cap.read()
             if ret:
-                # Resize the frame for consistency
                 frame = cv2.resize(frame, (self.width, self.height))
 
-                # Check for QR code when scanning is triggered
                 if self.scanning:
                     decoded_objects = decode(frame)
                     for obj in decoded_objects:
@@ -232,49 +251,37 @@ class WebcamScanner:
                             print(f"Scanned Number: {number}")
                             self.play_sound()
                             with self.lock:
-                                self.scanned_code = number  # Store scanned code
-                            self.scanning = False  # Stop scanning after detecting
+                                self.scanned_code = number
+                            self.scanning = False
                             break
 
-                # Put the frame into the queue if space is available
                 if not self.frame_queue.full():
                     self.frame_queue.put(frame)
 
-            # Delay to reduce CPU usage
             time.sleep(0.01)
 
     def get_scanned_code(self):
         """Returns the last scanned QR code and resets it to None."""
         with self.lock:
             code = self.scanned_code
-            self.scanned_code = None  # Reset after returning
+            self.scanned_code = None
             return code
 
     def update_frame(self):
         """Updates the tkinter label with the latest frame from the queue."""
+        if not self.running:
+            return  # Stop updating if the camera is off
+
         if not self.frame_queue.empty():
             frame = self.frame_queue.get()
-
-            # Convert the frame to RGB and display it
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             img = Image.fromarray(frame)
             imgtk = ImageTk.PhotoImage(image=img)
 
-            # Update the tkinter label
             self.video_label.imgtk = imgtk
             self.video_label.configure(image=imgtk)
 
-        # Schedule the next frame update
-        self.video_label.after(10, self.update_frame)
-
-    def stop(self):
-        """Releases the webcam and stops the feed."""
-        self.running = False
-        self.capture_thread.join()
-        self.cap.release()
-        cv2.destroyAllWindows()
-
-
+        self.video_label.after(10, self.update_frame)  # Keep updating while camera is running
         
    
 #------------------------------------------------------------ MENU PAGE CODE ------------------------------------------
@@ -309,7 +316,8 @@ mu_lab_fram.pack()
 qr_window.pack()
 
 scanner = WebcamScanner(qr_window, width=350, height=400, camera_index=0)
-cv_done =False
+scanner.start_camera()
+
 scan_g = ttk.Button(frame1,text='Available',image = scan_g_img,command=lambda:plate_avail(scanner),bootstyle=b_style,padding=0).pack(padx=10,expand=False)#pady=10)
 scan_b = ttk.Button(frame1,text='USE',image=scan_b_img,command=lambda:plate_in_use(scanner),bootstyle=b_style,padding=0)
 scan_b.pack(pady=10,expand=False)#padx=10)
@@ -633,5 +641,8 @@ nb.add(modify_db,text="(testing)")
 web_thread = threading.Thread(target = server_run)
 web_thread.start()
 nb.pack()
+def adios():
+    scanner.stop_camera()
+    root.destroy()
+root.protocol("WM_DELETE_WINDOW",adios)
 root.mainloop()
-scanner.stop()

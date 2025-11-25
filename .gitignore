@@ -1,0 +1,9 @@
+#output file
+output
+
+#database
+python_proj.db
+
+#qr_codes
+qr_codes/
+qr_codes
